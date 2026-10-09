@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>io.bankx.kx98-display</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/dechmontri.s/work/ai/poc/kx98-display/.venv/bin/python</string>
+        <string>-m</string>
+        <string>kx98.main</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/dechmontri.s/work/ai/poc/kx98-display</string>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/Users/dechmontri.s/Library/Logs/kx98-display.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/dechmontri.s/Library/Logs/kx98-display.log</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PYTHONPATH</key>
+        <string>/Users/dechmontri.s/work/ai/poc/kx98-display</string>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+</dict>
+</plist>
