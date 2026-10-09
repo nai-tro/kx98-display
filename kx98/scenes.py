@@ -42,8 +42,8 @@ def scene_idle_omp_loop(ctx: SceneContext) -> Optional[list[Image.Image]]:
         )[0]
         frames.append(f)
 
-    # Safe limit: max 4 models
-    return frames[:4]
+    # Include all active models (up to safe buffer limit of 6)
+    return frames[:6]
 
 
 def scene_music_and_omp_loop(ctx: SceneContext) -> Optional[list[Image.Image]]:
@@ -69,8 +69,9 @@ def scene_music_and_omp_loop(ctx: SceneContext) -> Optional[list[Image.Image]]:
         frames.append(f)
 
     # 2. OMP models (top 2 active models)
+    # 2. OMP models (include ALL active models!)
     if ctx.omp_list:
-        for item in ctx.omp_list[:2]:
+        for item in ctx.omp_list:
             f = render_animated_omp_bar(
                 fraction=item.used_fraction,
                 bar_color=item.color,
