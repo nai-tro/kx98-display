@@ -5,6 +5,7 @@ from typing import Optional
 from PIL import Image
 
 from kx98.sources.omp import OmpUsageItem
+from kx98.sources.music import MusicData
 from kx98.sources.spotify import SpotifyData
 from kx98.palette import MUSIC
 from kx98.render import (
@@ -17,8 +18,8 @@ from kx98.render import (
 @dataclass
 class SceneContext:
     omp_list: list[OmpUsageItem] = field(default_factory=list)
+    music: Optional[MusicData] = None
     spotify: Optional[SpotifyData] = None
-
 
 def scene_idle_omp_loop(ctx: SceneContext) -> Optional[list[Image.Image]]:
     """
@@ -55,16 +56,19 @@ def scene_music_and_omp_loop(ctx: SceneContext) -> Optional[list[Image.Image]]:
     - Frame 3: Top OMP model 2 (holds 3.5s, e.g. Claude or Gemini)
     The keyboard loops through Music AND OMP continuously in hardware with ZERO host writes!
     """
-    spot = ctx.spotify
-    if not spot or not spot.playing or not spot.track:
+    track_str = None
+    if ctx.music and ctx.music.playing and ctx.music.track:
+        track_str = ctx.music.track
+    elif ctx.spotify and ctx.spotify.playing and ctx.spotify.track:
+        track_str = ctx.spotify.track
+
+    if not track_str:
         return None
 
     frames = []
-
     # 1. Music cards (Title + Artist)
-    cards = get_music_cards(spot.track.upper())
+    cards = get_music_cards(track_str.upper())
     for card_type, card_text in cards[:2]:
-        # 1 frame per music card
         f = render_music_single_card(card_text, color=MUSIC)[0]
         frames.append(f)
 

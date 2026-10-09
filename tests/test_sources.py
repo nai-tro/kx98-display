@@ -1,8 +1,8 @@
 """Tests for data sources (spotify, omp)."""
 
 from kx98.sources.spotify import SpotifySource
+from kx98.sources.music import MusicSource
 from kx98.sources.omp import OmpSource
-
 
 def test_spotify_source():
     src = SpotifySource()
@@ -11,6 +11,14 @@ def test_spotify_source():
         assert data.playing is True
         assert isinstance(data.track, str)
 
+
+def test_music_source():
+    src = MusicSource()
+    data = src.poll()
+    assert data is not None
+    assert isinstance(data.playing, bool)
+    if data.playing:
+        assert data.track is not None
 
 def test_omp_source():
     src = OmpSource()

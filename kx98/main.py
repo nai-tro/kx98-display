@@ -23,7 +23,7 @@ from kx98.config import (
 from kx98.hiddev import Display
 from kx98.scenes import scene_music_and_omp_loop, scene_idle_omp_loop, SceneContext
 from kx98.sources.omp import OmpSource
-from kx98.sources.spotify import SpotifySource
+from kx98.sources.music import MusicSource
 
 logging.basicConfig(
     level=logging.INFO,
@@ -50,7 +50,7 @@ class DisplayDaemon:
     def __init__(self):
         self.display = Display(push_mode=PUSH_MODE)
         self.omp_source = OmpSource()
-        self.spotify_source = SpotifySource()
+        self.music_source = MusicSource()
 
         self.ctx = SceneContext()
         self.running = True
@@ -61,8 +61,8 @@ class DisplayDaemon:
         self.last_truncate_time = 0.0
 
         # State signatures to trigger updates ONLY on change
-        self.last_spotify_playing: Optional[bool] = None
-        self.last_spotify_track: Optional[str] = None
+        self.last_music_playing: Optional[bool] = None
+        self.last_music_track: Optional[str] = None
         self.last_omp_signature: Optional[str] = None
 
     def setup_signals(self):
@@ -76,7 +76,7 @@ class DisplayDaemon:
     def poll_sources(self, now: float, force: bool = False) -> None:
         """Poll Spotify (every 3s) and OMP (every 20s)."""
         if force or (now - self.last_spot_poll >= INTERVAL_SPOTIFY) or self.last_spot_poll == 0.0:
-            self.ctx.spotify = self.spotify_source.poll()
+            self.ctx.music = self.music_source.poll()
             self.last_spot_poll = now
 
         if force or (now - self.last_omp_poll >= INTERVAL_OMP) or self.last_omp_poll == 0.0:
@@ -84,27 +84,25 @@ class DisplayDaemon:
             self.last_omp_poll = now
 
     def update_hardware_loop(self) -> None:
-        """Upload hardware animation only when content actually changes."""
-        is_playing = bool(self.ctx.spotify and self.ctx.spotify.playing and self.ctx.spotify.track)
-        cur_track = self.ctx.spotify.track if is_playing else None
+        is_playing = bool(self.ctx.music and self.ctx.music.playing and self.ctx.music.track)
+        cur_track = self.ctx.music.track if is_playing else None
         omp_sig = "-".join(f"{it.prefix}:{it.pct_text}" for it in self.ctx.omp_list)
 
         needs_upload = False
         log_reason = ""
 
-        # Trigger 1: Spotify playback state changed (started or stopped)
-        if is_playing != self.last_spotify_playing:
-            self.last_spotify_playing = is_playing
-            self.last_spotify_track = cur_track
+        # Trigger 1: Music playback state changed (started or stopped)
+        if is_playing != self.last_music_playing:
+            self.last_music_playing = is_playing
+            self.last_music_track = cur_track
             needs_upload = True
-            log_reason = f"Spotify {'started' if is_playing else 'stopped'}"
+            log_reason = f"Music {'started' if is_playing else 'stopped'}"
 
-        # Trigger 2: Spotify track changed
-        elif is_playing and cur_track != self.last_spotify_track:
-            self.last_spotify_track = cur_track
+        # Trigger 2: Music track changed
+        elif is_playing and cur_track != self.last_music_track:
+            self.last_music_track = cur_track
             needs_upload = True
             log_reason = f"Track changed to '{cur_track}'"
-
         # Trigger 3: OMP usage changed
         elif not is_playing and omp_sig != self.last_omp_signature:
             self.last_omp_signature = omp_sig
