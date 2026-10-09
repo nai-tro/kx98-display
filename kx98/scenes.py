@@ -21,8 +21,32 @@ class SceneContext:
     spotify: Optional[SpotifyData] = None
 
 
+def scene_all_omp(ctx: SceneContext) -> Optional[list[Image.Image]]:
+    """
+    Combine all active OMP models into a unified multi-frame hardware loop.
+    Each model gets 2 frames (base + pulse highlight).
+    The keyboard hardware loops through all models continuously with ZERO periodic USB writes!
+    """
+    if not ctx.omp_list:
+        return None
+
+    all_frames = []
+    for item in ctx.omp_list:
+        frames = render_animated_omp_bar(
+            fraction=item.used_fraction,
+            bar_color=item.color,
+            prefix=item.prefix,
+            pct_text=item.pct_text,
+            num_frames=2,
+        )
+        all_frames.extend(frames)
+
+    # Safe limit: max 8 frames
+    return all_frames[:8]
+
+
 def scene_omp(ctx: SceneContext) -> Optional[list[Image.Image]]:
-    """OMP usage scene: animated progress bar with prefix on left and percent on right."""
+    """Single OMP model animation."""
     item = ctx.active_omp
     if not item:
         if ctx.omp_list:
@@ -43,7 +67,7 @@ def scene_omp(ctx: SceneContext) -> Optional[list[Image.Image]]:
 def scene_music_card(ctx: SceneContext, card_idx: int = 0) -> Optional[tuple[str, list[Image.Image]]]:
     """
     Return a single music card (Title or Artist) with dancing audio EQ sound waves on both edges.
-    Returns (label_log, 4_frames). Each card is held for 15s in the daemon loop.
+    Returns (label_log, 4_frames).
     """
     spot = ctx.spotify
     if not spot or not spot.playing or not spot.track:

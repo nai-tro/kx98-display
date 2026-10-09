@@ -171,16 +171,9 @@ class Display:
         if not path_main or not path_flash:
             raise OSError("Could not locate wired main and flash HID interfaces")
 
+        # Send flash animation directly to UP_FLASH without 0x36 handshake
+        # (Prevents keyboard controller from pausing CPU and blinking "LOADING" on TFT)
         self.close()
-        h_main = hid.device()
-        h_main.open_path(path_main)
-        prep = bytearray(PACKET_LEN)
-        prep[0] = 0xAA
-        prep[1] = 0x36
-        h_main.write(b"\x00" + bytes(prep))
-        time.sleep(0.05)
-        h_main.close()
-
         h_flash = hid.device()
         h_flash.open_path(path_flash)
         try:
@@ -192,7 +185,7 @@ class Display:
                     return False
         finally:
             h_flash.close()
-            time.sleep(1.0)
+            time.sleep(0.05)
             self.open()
 
         self.last_write_time = time.time()
