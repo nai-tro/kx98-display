@@ -38,7 +38,7 @@ class OmpSource:
 
         now = time.time()
         now_ms = int(now * 1000)
-        cutoff_ms = now_ms - (15 * 60 * 1000)
+        cutoff_ms = now_ms - (24 * 60 * 60 * 1000)  # 24 hours lookback so all accounts stay present
 
         for attempt in range(2):
             try:

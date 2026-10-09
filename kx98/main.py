@@ -1,4 +1,4 @@
-"""Main daemon service for KX98 display with 30s music dwell and C/G/X stats."""
+"""Main daemon service for KX98 display with 15s music cards and instant reconnect sync."""
 
 import logging
 import signal
@@ -10,14 +10,12 @@ from kx98.config import (
     INTERVAL_SPOTIFY,
     INTERVAL_OMP,
     PUSH_MODE,
-    MUSIC_FRAME_DELAY_MS,
     DWELL_OMP,
-    DWELL_MUSIC,
     MAX_LOG_LINES,
     LOG_PATH,
 )
 from kx98.hiddev import Display
-from kx98.scenes import scene_omp, scene_music, SceneContext
+from kx98.scenes import scene_omp, scene_music_card, SceneContext
 from kx98.sources.omp import OmpSource
 from kx98.sources.spotify import SpotifySource
 
@@ -27,8 +25,8 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 logger = logging.getLogger("kx98.daemon")
-DWELL_OMP_SECONDS = DWELL_OMP
-DWELL_MUSIC_SECONDS = DWELL_MUSIC
+
+CARD_DWELL_SECONDS = DWELL_OMP  # 15.0s per card (both OMP and Music Title/Artist)
 
 
 def truncate_log_file(log_path=LOG_PATH, max_lines=MAX_LOG_LINES) -> None:
@@ -42,6 +40,7 @@ def truncate_log_file(log_path=LOG_PATH, max_lines=MAX_LOG_LINES) -> None:
             log_path.write_text("\n".join(kept) + "\n")
     except Exception:
         pass
+
 
 class DisplayDaemon:
     def __init__(self):
@@ -58,9 +57,9 @@ class DisplayDaemon:
 
         # Rotation state
         self.omp_cursor = 0
+        self.music_card_idx = 0
         self.current_mode = "omp"  # "omp" or "music"
         self.scene_start_time = 0.0
-        self.current_dwell = DWELL_OMP_SECONDS
         self.last_truncate_time = 0.0
 
         # Content change triggers
@@ -74,11 +73,11 @@ class DisplayDaemon:
         signal.signal(signal.SIGINT, _handle_signal)
         signal.signal(signal.SIGTERM, _handle_signal)
 
-    def poll_sources(self, now: float) -> bool:
+    def poll_sources(self, now: float, force: bool = False) -> bool:
         """Poll data sources. Returns True if a new Spotify song started playing."""
         new_track = False
 
-        if now - self.last_spot_poll >= INTERVAL_SPOTIFY or self.last_spot_poll == 0.0:
+        if force or (now - self.last_spot_poll >= INTERVAL_SPOTIFY) or self.last_spot_poll == 0.0:
             self.ctx.spotify = self.spotify_source.poll()
             self.last_spot_poll = now
             cur_track = self.ctx.spotify.track if (self.ctx.spotify and self.ctx.spotify.playing) else None
@@ -87,7 +86,7 @@ class DisplayDaemon:
                 if cur_track is not None:
                     new_track = True
 
-        if now - self.last_omp_poll >= INTERVAL_OMP or self.last_omp_poll == 0.0:
+        if force or (now - self.last_omp_poll >= INTERVAL_OMP) or self.last_omp_poll == 0.0:
             self.ctx.omp_list = self.omp_source.poll_all()
             self.last_omp_poll = now
 
@@ -109,7 +108,7 @@ class DisplayDaemon:
             return False
 
     def advance_rotation(self) -> None:
-        """Rotate between active OMP providers and Spotify (if playing)."""
+        """Rotate through OMP providers and 15s Music Title/Artist cards."""
         spotify_active = bool(self.ctx.spotify and self.ctx.spotify.playing and self.ctx.spotify.track)
 
         if not self.ctx.omp_list:
@@ -117,33 +116,35 @@ class DisplayDaemon:
 
         num_omp = len(self.ctx.omp_list)
 
-        # Transition:
-        # If showing music -> go to first OMP
-        # If showing OMP -> advance cursor. If wrapped around:
-        #   if spotify active -> show music
-        #   else -> loop back to first OMP
+        # Rotation state machine
         if self.current_mode == "music":
-            self.current_mode = "omp"
-            self.omp_cursor = 0
+            # Advance music card (Title -> Artist)
+            self.music_card_idx += 1
+            if self.music_card_idx >= 2:
+                # Finished both Title & Artist -> switch back to OMP
+                self.current_mode = "omp"
+                self.omp_cursor = 0
+                self.music_card_idx = 0
         else:
+            # In OMP mode: advance to next model
             self.omp_cursor += 1
             if self.omp_cursor >= num_omp:
                 if spotify_active:
                     self.current_mode = "music"
+                    self.music_card_idx = 0
                 else:
                     self.omp_cursor = 0
 
-        # Execute
+        # Execute Music
         if self.current_mode == "music" and spotify_active:
-            self.current_dwell = DWELL_MUSIC_SECONDS
-            frames = scene_music(self.ctx)
-            if frames:
-                self.push_frames(frames, f"MUSIC: {self.ctx.spotify.track}", delay_ms=MUSIC_FRAME_DELAY_MS)
+            card = scene_music_card(self.ctx, card_idx=self.music_card_idx)
+            if card:
+                label_log, frames = card
+                self.push_frames(frames, label_log, delay_ms=150)
                 return
 
-        # Fallback to OMP
+        # Execute OMP
         self.current_mode = "omp"
-        self.current_dwell = DWELL_OMP_SECONDS
         if self.ctx.omp_list:
             self.omp_cursor = self.omp_cursor % len(self.ctx.omp_list)
             self.ctx.active_omp = self.ctx.omp_list[self.omp_cursor]
@@ -158,8 +159,9 @@ class DisplayDaemon:
     def run(self):
         truncate_log_file()
         self.last_truncate_time = time.time()
-        logger.info(f"Starting KX98 Display Daemon (OMP {DWELL_OMP}s, Music {DWELL_MUSIC}s, log cap {MAX_LOG_LINES} lines)...")
+        logger.info(f"Starting KX98 Display Daemon (Dwell={CARD_DWELL_SECONDS}s per card, OMP sync={INTERVAL_OMP}s)...")
         self.setup_signals()
+
         # Connect to HID device
         while self.running:
             try:
@@ -171,7 +173,7 @@ class DisplayDaemon:
 
         # Initial source poll & first push
         now = time.time()
-        self.poll_sources(now)
+        self.poll_sources(now, force=True)
         self.advance_rotation()
 
         # Main loop
@@ -179,24 +181,26 @@ class DisplayDaemon:
             now = time.time()
             new_track = self.poll_sources(now)
 
-            # If a new song starts playing, immediately switch to music
+            # If a new song starts playing, immediately switch to Title card for 15s
             if new_track and self.ctx.spotify and self.ctx.spotify.playing:
-                logger.info("New Spotify track detected, switching immediately to 30s music display...")
+                logger.info("New Spotify track detected, switching immediately to Title card...")
                 self.current_mode = "music"
-                self.current_dwell = DWELL_MUSIC_SECONDS
-                frames = scene_music(self.ctx)
-                if frames:
-                    self.push_frames(frames, f"MUSIC: {self.ctx.spotify.track}", delay_ms=MUSIC_FRAME_DELAY_MS)
+                self.music_card_idx = 0
+                card = scene_music_card(self.ctx, card_idx=0)
+                if card:
+                    self.push_frames(card[1], card[0], delay_ms=150)
+
+            # Rotate when dwell time (15s) expires
+            if now - self.scene_start_time >= CARD_DWELL_SECONDS:
+                self.advance_rotation()
+
             # Periodic log file truncation (every 30 minutes)
             if now - self.last_truncate_time >= 1800.0:
                 truncate_log_file()
                 self.last_truncate_time = now
 
-            # Rotate when dwell time expires
-            if now - self.scene_start_time >= self.current_dwell:
-                self.advance_rotation()
-
             time.sleep(1.0)
+
         logger.info("Daemon stopped. Leaving display state intact.")
         self.display.close()
 

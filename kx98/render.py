@@ -172,50 +172,52 @@ def draw_eq_bar(img: Image.Image, col: int, height: int, color: tuple[int, int, 
         img.putpixel((col, y), pixel_color)
 
 
-def render_music_eq_frames(
-    text: str,
-    color: tuple[int, int, int],
+def render_music_single_card(
+    page_text: str,
+    color: tuple[int, int, int] = (30, 215, 96),
 ) -> list[Image.Image]:
     """
-    Render Spotify music with dancing 3-bar audio sound waves on both LEFT and RIGHT edges.
-    Text is centered in the middle (cols 4..46), 100% sharp, centered, and static.
+    Render a single static text card (Title or Artist) with dancing 3-bar sound waves on both edges.
+    Returns 4 animated frames where the audio equalizers bounce at 150ms rhythm.
     """
-    latin = to_latin(text)
-
-    if " - " in latin:
-        parts = latin.split(" - ", 1)
-        title_raw = parts[0].strip()
-        artist_raw = parts[1].strip()
-        pages = paginate_text(title_raw, max_chars=10) + paginate_text(artist_raw, max_chars=10)
-    else:
-        pages = paginate_text(latin, max_chars=10)
-
-    # Cap at 2 pages (Title page, Artist page) -> total 8 frames (4 per page)
-    pages = pages[:2]
-
-    frames = []
     center_start = 4
     center_end = 46
     center_w = center_end - center_start + 1
 
-    for page_text in pages:
-        text_w = len(page_text) * 4 - 1
-        text_x = center_start + max(0, (center_w - text_w) // 2)
+    text_w = len(page_text) * 4 - 1
+    text_x = center_start + max(0, (center_w - text_w) // 2)
 
-        for left_h, right_h in EQ_PATTERNS:
-            img = create_blank_frame(BLACK)
-
-            # 1. Left sound wave equalizer (cols 0, 1, 2)
-            for i, h in enumerate(left_h):
-                draw_eq_bar(img, i, h, color)
-
-            # 2. Right sound wave equalizer (cols 48, 49, 50)
-            for i, h in enumerate(right_h):
-                draw_eq_bar(img, 48 + i, h, color)
-
-            # 3. Centered sharp 3x5 text in white
-            draw_text_3x5(img, page_text, x=text_x, y=0, color=WHITE)
-
-            frames.append(img)
+    frames = []
+    for left_h, right_h in EQ_PATTERNS:
+        img = create_blank_frame(BLACK)
+        for i, h in enumerate(left_h):
+            draw_eq_bar(img, i, h, color)
+        for i, h in enumerate(right_h):
+            draw_eq_bar(img, 48 + i, h, color)
+        draw_text_3x5(img, page_text, x=text_x, y=0, color=WHITE)
+        frames.append(img)
 
     return frames
+
+
+def get_music_cards(text: str, max_chars: int = 10) -> list[tuple[str, str]]:
+    """
+    Parse and paginate track into discrete Romanized Latin cards.
+    Returns list of (type, text), e.g. [('TITLE', 'SUBTITLE'), ('ARTIST', 'OFFICIAL HIG')].
+    """
+    latin = to_latin(text)
+    if " - " in latin:
+        parts = latin.split(" - ", 1)
+        title_raw = parts[0].strip()
+        artist_raw = parts[1].strip()
+        title_pages = paginate_text(title_raw, max_chars=max_chars)
+        artist_pages = paginate_text(artist_raw, max_chars=max_chars)
+        cards = []
+        for tp in title_pages[:2]:
+            cards.append(("TITLE", tp))
+        for ap in artist_pages[:1]:
+            cards.append(("ARTIST", ap))
+        return cards
+    else:
+        pages = paginate_text(latin, max_chars=max_chars)
+        return [("TITLE", p) for p in pages[:2]]

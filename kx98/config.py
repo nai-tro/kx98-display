@@ -37,7 +37,7 @@ MUSIC_FRAME_DELAY_MS = int(os.environ.get("KX_MUSIC_DELAY_MS", "150")) # 150ms f
 
 # Source polling intervals
 INTERVAL_SPOTIFY = float(os.environ.get("KX_INTERVAL_SPOTIFY", "3.0"))   # fast on-change check
-INTERVAL_OMP = float(os.environ.get("KX_INTERVAL_OMP", "300.0"))         # 5 minutes OMP refresh
+INTERVAL_OMP = float(os.environ.get("KX_INTERVAL_OMP", "20.0"))           # 20 seconds OMP refresh
 
 # Log retention: keep only the latest N lines (auto-purged)
 MAX_LOG_LINES = int(os.environ.get("KX_MAX_LOG_LINES", "500"))

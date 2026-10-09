@@ -9,7 +9,8 @@ from kx98.sources.spotify import SpotifyData
 from kx98.palette import MUSIC
 from kx98.render import (
     render_animated_omp_bar,
-    render_music_eq_frames,
+    render_music_single_card,
+    get_music_cards,
 )
 
 
@@ -39,14 +40,26 @@ def scene_omp(ctx: SceneContext) -> Optional[list[Image.Image]]:
     return frames
 
 
-def scene_music(ctx: SceneContext) -> Optional[list[Image.Image]]:
-    """Music scene: centered Romanized Title/Artist with dancing audio EQ sound waves on both edges."""
+def scene_music_card(ctx: SceneContext, card_idx: int = 0) -> Optional[tuple[str, list[Image.Image]]]:
+    """
+    Return a single music card (Title or Artist) with dancing audio EQ sound waves on both edges.
+    Returns (label_log, 4_frames). Each card is held for 15s in the daemon loop.
+    """
     spot = ctx.spotify
     if not spot or not spot.playing or not spot.track:
         return None
 
-    frames = render_music_eq_frames(
-        spot.track.upper(),
-        color=MUSIC,
-    )
-    return frames
+    cards = get_music_cards(spot.track.upper())
+    if not cards:
+        return None
+
+    idx = card_idx % len(cards)
+    card_type, card_text = cards[idx]
+    frames = render_music_single_card(card_text, color=MUSIC)
+    return (f"MUSIC: {card_type} '{card_text}'", frames)
+
+
+def scene_music(ctx: SceneContext) -> Optional[list[Image.Image]]:
+    """Default scene_music returning the first card."""
+    res = scene_music_card(ctx, card_idx=0)
+    return res[1] if res else None
