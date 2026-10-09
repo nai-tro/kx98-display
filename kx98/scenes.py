@@ -1,4 +1,4 @@
-"""Scene generators for KX98 display daemon."""
+"""Scene generators for KX98 display daemon using hardware-side looping."""
 
 from dataclasses import dataclass, field
 from typing import Optional
@@ -17,73 +17,67 @@ from kx98.render import (
 @dataclass
 class SceneContext:
     omp_list: list[OmpUsageItem] = field(default_factory=list)
-    active_omp: Optional[OmpUsageItem] = None
     spotify: Optional[SpotifyData] = None
 
 
-def scene_all_omp(ctx: SceneContext) -> Optional[list[Image.Image]]:
+def scene_idle_omp_loop(ctx: SceneContext) -> Optional[list[Image.Image]]:
     """
-    Combine all active OMP models into a unified multi-frame hardware loop.
-    Each model gets 2 frames (base + pulse highlight).
-    The keyboard hardware loops through all models continuously with ZERO periodic USB writes!
+    Generate an animation containing all active OMP models.
+    Each model gets 1 static frame with a pulsing accent.
+    With delay_ms=3000 (3s per model), the keyboard loops all models in hardware
+    with ZERO host USB writes during your work session!
     """
     if not ctx.omp_list:
         return None
 
-    all_frames = []
+    frames = []
     for item in ctx.omp_list:
-        frames = render_animated_omp_bar(
+        # Generate 1 frame per model
+        f = render_animated_omp_bar(
             fraction=item.used_fraction,
             bar_color=item.color,
             prefix=item.prefix,
             pct_text=item.pct_text,
-            num_frames=2,
-        )
-        all_frames.extend(frames)
+            num_frames=1,
+        )[0]
+        frames.append(f)
 
-    # Safe limit: max 8 frames
-    return all_frames[:8]
-
-
-def scene_omp(ctx: SceneContext) -> Optional[list[Image.Image]]:
-    """Single OMP model animation."""
-    item = ctx.active_omp
-    if not item:
-        if ctx.omp_list:
-            item = ctx.omp_list[0]
-        else:
-            return None
-
-    frames = render_animated_omp_bar(
-        fraction=item.used_fraction,
-        bar_color=item.color,
-        prefix=item.prefix,
-        pct_text=item.pct_text,
-        num_frames=4,
-    )
-    return frames
+    # Safe limit: max 4 models
+    return frames[:4]
 
 
-def scene_music_card(ctx: SceneContext, card_idx: int = 0) -> Optional[tuple[str, list[Image.Image]]]:
+def scene_music_and_omp_loop(ctx: SceneContext) -> Optional[list[Image.Image]]:
     """
-    Return a single music card (Title or Artist) with dancing audio EQ sound waves on both edges.
-    Returns (label_log, 4_frames).
+    When Spotify is playing, generate a unified 4-frame animation containing:
+    - Frame 0: Song Title (holds 3.5s) with dual sound wave equalizers
+    - Frame 1: Artist Name (holds 3.5s) with dual sound wave equalizers
+    - Frame 2: Top OMP model 1 (holds 3.5s)
+    - Frame 3: Top OMP model 2 (holds 3.5s, e.g. Claude or Gemini)
+    The keyboard loops through Music AND OMP continuously in hardware with ZERO host writes!
     """
     spot = ctx.spotify
     if not spot or not spot.playing or not spot.track:
         return None
 
+    frames = []
+
+    # 1. Music cards (Title + Artist)
     cards = get_music_cards(spot.track.upper())
-    if not cards:
-        return None
+    for card_type, card_text in cards[:2]:
+        # 1 frame per music card
+        f = render_music_single_card(card_text, color=MUSIC)[0]
+        frames.append(f)
 
-    idx = card_idx % len(cards)
-    card_type, card_text = cards[idx]
-    frames = render_music_single_card(card_text, color=MUSIC)
-    return (f"MUSIC: {card_type} '{card_text}'", frames)
+    # 2. OMP models (top 2 active models)
+    if ctx.omp_list:
+        for item in ctx.omp_list[:2]:
+            f = render_animated_omp_bar(
+                fraction=item.used_fraction,
+                bar_color=item.color,
+                prefix=item.prefix,
+                pct_text=item.pct_text,
+                num_frames=1,
+            )[0]
+            frames.append(f)
 
-
-def scene_music(ctx: SceneContext) -> Optional[list[Image.Image]]:
-    """Default scene_music returning the first card."""
-    res = scene_music_card(ctx, card_idx=0)
-    return res[1] if res else None
+    return frames
