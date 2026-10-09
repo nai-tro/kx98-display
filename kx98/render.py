@@ -69,7 +69,7 @@ def render_animated_omp_bar(
     total_bar_w = max(10, bar_end_x - bar_start_x + 1)
 
     clamped_frac = max(0.0, min(1.0, fraction))
-    fill_w = max(1, int(round(clamped_frac * total_bar_w)))
+    fill_w = int(round(clamped_frac * total_bar_w)) if clamped_frac > 0 else 0
 
     for f in range(num_frames):
         img = create_blank_frame(BLACK)
@@ -87,19 +87,11 @@ def render_animated_omp_bar(
         img.putpixel((bar_start_x, 2), (25, 25, 25))
         img.putpixel((bar_end_x, 2), (25, 25, 25))
 
-        # Filled progress
+        # Filled progress in 100% pure model color (no white pixels)
         for x in range(bar_start_x, bar_start_x + fill_w):
             if x <= bar_end_x:
                 for y in (1, 2, 3):
                     img.putpixel((x, y), bar_color)
-
-        # Sweeping highlight pulse across the filled bar
-        if fill_w > 2:
-            pulse_center = bar_start_x + int((fill_w - 1) * (f / max(1, num_frames - 1)))
-            for px in (pulse_center - 1, pulse_center, pulse_center + 1):
-                if bar_start_x <= px < bar_start_x + fill_w and px <= bar_end_x:
-                    for y in (1, 2, 3):
-                        img.putpixel((px, y), (255, 255, 255))
 
         frames.append(img)
 
