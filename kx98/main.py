@@ -139,11 +139,11 @@ class DisplayDaemon:
                 logger.warning(f"Could not open KX98 display: {e}. Retrying in 5s...")
                 time.sleep(5.0)
 
-        # Initial source poll & first hardware flash
+        # Initial source poll & upstream quota refresh
         now = time.time()
+        self.omp_source.refresh_upstream_async()
         self.poll_sources(now, force=True)
         self.update_hardware_loop()
-
         # Main loop: checks state every 1s, writes ONLY when content changes!
         while self.running:
             now = time.time()

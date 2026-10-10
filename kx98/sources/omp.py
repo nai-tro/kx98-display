@@ -30,7 +30,23 @@ class OmpSource:
         self.db_path = db_path
         self._last_items: list[OmpUsageItem] = []
         self._last_success_time: float = 0.0
+        self._last_upstream_refresh: float = 0.0
 
+    def refresh_upstream_async(self) -> None:
+        """Trigger 'omp usage --json' in the background to fetch fresh API quotas."""
+        import shutil
+        import subprocess
+        omp_bin = shutil.which("omp") or str(Path.home() / ".local" / "bin" / "omp")
+        if Path(omp_bin).is_file():
+            try:
+                subprocess.Popen(
+                    [omp_bin, "usage", "--json"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                self._last_upstream_refresh = time.time()
+            except Exception as e:
+                logger.debug(f"Could not trigger upstream omp refresh: {e}")
     def poll_all(self) -> list[OmpUsageItem]:
         """Poll latest usage filtering out weekly windows and assigning C/G/X prefixes."""
         if not self.db_path.is_file():
@@ -43,9 +59,17 @@ class OmpSource:
         for attempt in range(2):
             try:
                 uri = f"file:{self.db_path}?mode=ro"
-                conn = sqlite3.connect(uri, uri=True, timeout=1.0)
                 cur = conn.cursor()
 
+                # Check if data in agent.db is older than 10 minutes (e.g. after sleep)
+                max_rec = cur.execute("SELECT MAX(recorded_at) FROM usage_history").fetchone()[0]
+                if max_rec:
+                    age_sec = (now_ms - max_rec) / 1000.0
+                    if age_sec > 600.0 and (now - self._last_upstream_refresh >= 180.0):
+                        logger.info(f"OMP database is {age_sec / 60:.1f}m old (laptop woke from sleep), triggering background API refresh...")
+                        self.refresh_upstream_async()
+                elif now - self._last_upstream_refresh >= 900.0:
+                    self.refresh_upstream_async()
                 query = """
                 WITH latest AS (
                     SELECT provider, account_key, email, limit_id, label, window_label, used_fraction, resets_at,
