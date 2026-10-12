@@ -25,7 +25,7 @@
         <key>PYTHONPATH</key>
         <string>/Users/dechmontri.s/work/ai/poc/kx98-display</string>
         <key>PATH</key>
-        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <string>/Users/dechmontri.s/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
     </dict>
 </dict>
 </plist>

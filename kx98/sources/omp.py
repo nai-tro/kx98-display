@@ -34,15 +34,18 @@ class OmpSource:
 
     def refresh_upstream_async(self) -> None:
         """Trigger 'omp usage --json' in the background to fetch fresh API quotas."""
-        import shutil
+        import os
         import subprocess
-        omp_bin = shutil.which("omp") or str(Path.home() / ".local" / "bin" / "omp")
+        omp_bin = str(Path.home() / ".local" / "bin" / "omp")
+        env = dict(os.environ)
+        env["PATH"] = f"{Path.home() / '.local' / 'bin'}:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
         if Path(omp_bin).is_file():
             try:
                 subprocess.Popen(
                     [omp_bin, "usage", "--json"],
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
+                    env=env,
                 )
                 self._last_upstream_refresh = time.time()
             except Exception as e:
@@ -54,11 +57,10 @@ class OmpSource:
 
         now = time.time()
         now_ms = int(now * 1000)
-        cutoff_ms = now_ms - (24 * 60 * 60 * 1000)  # 24 hours lookback so all accounts stay present
-
         for attempt in range(2):
             try:
                 uri = f"file:{self.db_path}?mode=ro"
+                conn = sqlite3.connect(uri, uri=True, timeout=1.0)
                 cur = conn.cursor()
 
                 # Check if data in agent.db is older than 10 minutes (e.g. after sleep)
@@ -75,13 +77,13 @@ class OmpSource:
                     SELECT provider, account_key, email, limit_id, label, window_label, used_fraction, resets_at,
                            ROW_NUMBER() OVER (PARTITION BY provider, account_key, limit_id, window_label ORDER BY recorded_at DESC) as rn
                     FROM usage_history
-                    WHERE recorded_at >= ? AND status != 'unavailable' AND used_fraction IS NOT NULL
+                    WHERE status != 'unavailable' AND used_fraction IS NOT NULL
                 )
                 SELECT provider, account_key, email, limit_id, label, window_label, used_fraction, resets_at
                 FROM latest
                 WHERE rn = 1;
                 """
-                rows = cur.execute(query, (cutoff_ms,)).fetchall()
+                rows = cur.execute(query).fetchall()
                 conn.close()
 
                 if not rows:
