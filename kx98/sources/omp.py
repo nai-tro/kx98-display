@@ -73,17 +73,19 @@ class OmpSource:
                 elif now - self._last_upstream_refresh >= 900.0:
                     self.refresh_upstream_async()
                 query = """
-                WITH latest AS (
+                WITH latest_batch AS (
                     SELECT provider, account_key, email, limit_id, label, window_label, used_fraction, resets_at,
                            ROW_NUMBER() OVER (PARTITION BY provider, account_key, limit_id, window_label ORDER BY recorded_at DESC) as rn
                     FROM usage_history
-                    WHERE status != 'unavailable' AND used_fraction IS NOT NULL
+                    WHERE recorded_at >= ? - 180000
+                      AND status != 'unavailable'
+                      AND used_fraction IS NOT NULL
                 )
                 SELECT provider, account_key, email, limit_id, label, window_label, used_fraction, resets_at
-                FROM latest
+                FROM latest_batch
                 WHERE rn = 1;
                 """
-                rows = cur.execute(query).fetchall()
+                rows = cur.execute(query, (max_rec,)).fetchall()
                 conn.close()
 
                 if not rows:
@@ -121,13 +123,13 @@ class OmpSource:
                                 if acct_id not in gemini_by_account or uf > gemini_by_account[acct_id][6]:
                                     gemini_by_account[acct_id] = r
 
-                    # 3. Codex: 5 hours (or monthly)
+                    # 3. Codex: 5 hours limit priority (defaults to 0%)
                     elif p == "openai-codex":
-                        if "5 hour" in w_lower or "30 day" in w_lower or "month" in w_lower:
-                            acct_id = email or acc
-                            if acct_id not in codex_by_account or uf > codex_by_account[acct_id][6]:
-                                codex_by_account[acct_id] = r
-
+                        acct_id = email or acc
+                        if "5 hour" in w_lower:
+                            codex_by_account[acct_id] = r
+                        elif acct_id not in codex_by_account and ("month" in w_lower or "30 day" in w_lower):
+                            codex_by_account[acct_id] = r
                 items = []
 
                 # Process Claude accounts
