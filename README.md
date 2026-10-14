@@ -45,7 +45,7 @@ A lightweight macOS background service that drives the 51×5 RGB LED matrix on *
 
 ### 2. Setup
 ```bash
-cd poc/kx98-display
+cd kx98-display
 uv sync
 ```
 
