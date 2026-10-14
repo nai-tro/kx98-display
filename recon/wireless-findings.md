@@ -94,3 +94,46 @@ Extracted from vendor bundle `app.75a71501.js`:
   3. `MaxOutputReportSize` is 2 bytes; cannot send 64 or 32-byte packets.
   4. `HFD-HUB` strictly queries for `usagePage === 65383`, which does not exist over BLE.
 - **Conclusion**: Bluetooth cannot drive the display on macOS.
+
+## Architectural Reasons & Practical Alternatives
+
+### Why 2.4G Dongle and Bluetooth Cannot Drive the Display
+
+1. **Physical Bus Isolation**:
+   Tri-mode mechanical keyboards (SARU Space KX98/KX87 with Sonix architecture) use a split dual-controller architecture:
+   - **Wired USB MCU** (Sonix SN32F): Connected to the USB-C port, the 51×5 RGB matrix LED driver, and the onboard SPI flash memory chip that stores the display animations.
+   - **Wireless SoC** (2.4G RF / BLE): Only reads key matrix switch contacts to transmit scancodes.
+   To preserve battery life (driving 315 RGB LEDs draws ~1.2A to 1.8A), the USB controller and display SPI flash bus are completely unpowered/isolated when running on battery/wireless.
+
+2. **Vendor Software Proof**:
+   Decompiled vendor web driver `HFD-HUB` (`app.75a71501.js`, line 2829046) explicitly verifies this:
+   ```js
+   s = await navigator.hid.getDevices();
+   d = s.find(e => e.collections.some(i => i.usagePage === 65383 && e.productId === Ll.m_keyboard_instance.productId));
+   if (!d) {
+     console.error("未找到usagePage为0xff67的设备"); // "Device with usagePage 0xFF67 not found"
+     this.$message.error(this.$t("screen_text13")); // "No available devices found"
+     return;
+   }
+   ```
+   The vendor's official software author hardcoded a requirement for `0xFF67` (USB bulk endpoint) and refuses to attempt screen sync on wireless interfaces.
+
+3. **Dongle Firmware Local Echo**:
+   Sending `0xAA <cmd>` packets to `0xFF60` on the 2.4G dongle produces a local synthetic `0x55 <cmd>` ACK generated directly by the USB dongle MCU (verified with invalid command `0xAA 0xEE` returning `0x55 0xEE`). The dongle does not have an over-the-air RF pipeline to write to the keyboard's screen flash.
+
+---
+
+### Practical Alternatives (If a Direct Cable to the Mac is Undesirable)
+
+1. **Magnetic USB-C Cable (Recommended / Zero-Latency)**:
+   - Attach a low-profile 24-pin magnetic USB-C plug into the keyboard's rear port.
+   - Snap on the cable when seated at the desk for full LED matrix sync + charging.
+   - Snap off instantly to move the keyboard around wire-free (keyboard reverts to 2.4G/BT for typing, while display retains the last burned frame in flash).
+
+2. **Mini Wireless USB Host Bridge (True Wire-Free to Mac)**:
+   - Hardware: Raspberry Pi Zero 2W or ESP32-S3 USB Host module attached underneath or behind the keyboard.
+   - Connection: A short 5 cm USB-C jumper connects the Pi/ESP32 directly to the keyboard. The keyboard detects a physical USB host connection (`0xFF67` endpoint active).
+   - Architecture:
+     - Mac runs a daemon worker that broadcasts OMP / Spotify stats over local Wi-Fi via UDP or MQTT.
+     - The Pi/ESP32 receives the network packet and executes `kx98.push` locally over the physical USB bus.
+   - Trade-off: Requires powering the Pi (via keyboard battery or external battery pack).
