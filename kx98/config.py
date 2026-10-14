@@ -7,15 +7,11 @@ from pathlib import Path
 # Supports SONiX KX87 / KX98, Ajazz, Epomaker, Aula, and other HFD-HUB matrix keyboards.
 VID = int(os.environ.get("KX_VID", "0x0C45"), 16)
 PID = int(os.environ.get("KX_PID", "0x8009"), 16)
-PID_DONGLE = int(os.environ.get("KX_PID_DONGLE", "0xFEFE"), 16)
-PIDS = (PID, PID_DONGLE)
 
 # HID Usage Pages
 USAGE_PAGE = int(os.environ.get("KX_USAGE_PAGE", "0xFF68"), 16)        # 65384: Main wired interface
 USAGE = int(os.environ.get("KX_USAGE", "0x0061"), 16)                  # 97
 USAGE_PAGE_FLASH = int(os.environ.get("KX_USAGE_PAGE_FLASH", "0xFF67"), 16) # 65383: Wired flash animation
-UP_DONGLE = int(os.environ.get("KX_UP_DONGLE", "0xFF60"), 16)          # 65376: 2.4G Dongle interface
-
 # Display matrix dimensions (Override via KX_COLS / KX_ROWS for other boards, e.g. 70x7, 63x5)
 COLS = int(os.environ.get("KX_COLS", "51"))
 ROWS = int(os.environ.get("KX_ROWS", "5"))

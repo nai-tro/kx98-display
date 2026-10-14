@@ -13,3 +13,7 @@ wheels/
 .pytest_cache/
 *.log
 .DS_Store
+
+# Recon & vendor assets
+recon/hfdhub/
+recon/captures/
