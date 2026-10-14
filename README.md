@@ -31,9 +31,9 @@ A lightweight macOS background service that drives the 51×5 RGB LED matrix on *
 
 | Connection | Supported? | Transport Details |
 |---|---|---|
-| **Wired USB Cable** | **YES (Priority 1)** | Rock-solid 4104-byte bulk packets on `0xFF67` (4096-byte payload chunks) with interface coordination on `0xFF68`. |
-| **2.4G USB Dongle** | **YES (Priority 2)** | Fully supported wireless transport. 32-byte flash packets (24-byte payload chunks) directly on vendor usage page `0xFF60` (PID `0xFEFE`), verified with 15ms inter-packet delay. Automatic fallback when wired cable is disconnected. |
-| **Bluetooth (macOS)** | **Not Reachable on macOS** | On macOS, Apple's Bluetooth Low Energy HID driver strictly exposes standard Generic Desktop Keyboard (UP `0x0001` Usage `0x0006`, MaxOutputReportSize = 2 bytes) and consumer collections. Zero vendor usage pages (`>= 0xFF00`) are created by macOS for BLE HID. Detailed reverse engineering findings in [`recon/wireless-findings.md`](recon/wireless-findings.md). |
+| **Wired USB Cable** | **YES (Required for Display)** | 100% reliable 4104-byte bulk packets on `0xFF67` (4096-byte payload chunks) with endpoint coordination on `0xFF68`. |
+| **2.4G USB Dongle** | **Keyboard / Input Only** | Dongle USB MCU synthetic-ACKs reports on `0xFF60`, but the keyboard's 51×5 LED matrix controller SPI bus is physically wired only to the USB controller. The 2.4G radio MCU cannot write to matrix flash. Reverse-engineering evidence in [`recon/wireless-findings.md`](recon/wireless-findings.md). |
+| **Bluetooth (macOS)** | **Keyboard / Input Only** | macOS BLE HID driver strictly exposes standard Generic Desktop Keyboard (UP `0x0001` Usage `0x0006`, MaxOutputReportSize = 2 bytes). Zero vendor usage pages (`>= 0xFF00`) are created by Apple's driver. Reverse-engineering evidence in [`recon/wireless-findings.md`](recon/wireless-findings.md). |
 ---
 
 ## Quick Start

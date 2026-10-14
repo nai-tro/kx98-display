@@ -78,18 +78,19 @@ Extracted from vendor bundle `app.75a71501.js`:
 
 ## Decision Gate Evaluation
 
-### 2.4G Dongle: FEASIBLE
-- **Condition**: Step 1.1 shows VID `0x0C45` with vendor usage page ≥ `0xFF00` and `MaxOutputReportSize >= 32`, AND Step 2 finds upload routine for that PID/UP.
-- **Evidence**:
-  - Step 1.1 live enumeration confirms VID `0x0C45` PID `0xFEFE` exposes vendor UP `0xFF60` (65376) usage `0x61` with `MaxOutputReportSize = 32`.
-  - Step 2 confirms `app.75a71501.js` targets `{vendorId: 3141, productId: 65278, usagePage: 65376}` and runs `buildPkt_Flash` with `n = 32`, `chunk_size = 24` directly on `0xFF60`.
-- **Action**: Implement and ship `DONGLE` profile.
+### 2.4G Dongle: INFEASIBLE (HARDWARE ISOLATION)
+- **Condition**: Step 1.1 showed VID `0x0C45` PID `0xFEFE` with UP `0xFF60` (32B report), but hardware verification (Step 6) proved packets never reach the display.
+- **Forensic Evidence**:
+  1. **Dummy ACK by Dongle USB Bridge**: Sent invalid command `0xAA 0xEE` to `0xFF60`. The dongle USB MCU immediately returned `0x55 0xEE` followed by 30 zero bytes. The dongle controller generates local synthetic ACKs for arbitrary reports without forwarding them over RF to the keyboard.
+  2. **Vendor Web Driver Confirmation**: In `HFD-HUB` (`app.75a71501.js` line 2829046), matrix screen sync requires `usagePage: 65383` (`0xFF67`). When `0xFF67` is absent, the UI errors with `未找到usagePage为0xff67的设备` ("Device with usagePage 0xff67 not found").
+  3. **Physical Hardware Bus Architecture**: The 51x5 LED matrix controller SPI flash is wired exclusively to the USB microcontroller's bulk endpoint (`0xFF67`, 4104B). The 2.4G RF receiver MCU only handles key/mouse HID input events and does not have bus access to the LED display controller.
+  4. **Hardware Proof**: 33 packets of solid blue sent over 2.4G dongle received `0x55 0x41` ACKs, but physical keyboard matrix remained displaying the previously flashed wired image (green).
+- **Conclusion**: KX87 / KX98 51x5 display is **strictly wired USB only**.
 
-### Bluetooth: INFEASIBLE ON MACOS
-- **Condition**: Step 1.2 shows PID `0xFEFE` with vendor usage page ≥ `0xFF00` and `MaxOutputReportSize >= 64`, AND Step 2 finds upload routine, AND Step 5 write succeeds.
-- **Evidence**:
-  - Step 1.2 live enumeration confirms macOS Bluetooth BLE HID exposes ONLY Generic Desktop Keyboard (UP `0x0001` Usage `0x0006`, `MaxOutputReportSize = 2`) and Mouse/Consumer collections.
-  - ZERO vendor usage pages (UP ≥ `0xFF00`) are created by Apple's BLE HID transport driver on macOS.
-  - `MaxOutputReportSize` is 2 bytes (cannot send 64 or 32-byte packets).
-  - `HFD-HUB` strictly queries for `usagePage === 65376` or `65383`, neither of which exists on macOS Bluetooth.
-- **Action**: Document findings and infeasibility in README and findings file. No Bluetooth profile added.
+### Bluetooth: INFEASIBLE ON MACOS (DRIVER & ARCHITECTURE)
+- **Forensic Evidence**:
+  1. macOS Bluetooth Low Energy HID driver strictly exposes standard Generic Desktop Keyboard (UP `0x0001` Usage `0x0006`, `MaxOutputReportSize = 2`) and consumer collections.
+  2. ZERO vendor usage pages (UP ≥ `0xFF00`) are created by Apple's BLE HID transport driver on macOS.
+  3. `MaxOutputReportSize` is 2 bytes; cannot send 64 or 32-byte packets.
+  4. `HFD-HUB` strictly queries for `usagePage === 65383`, which does not exist over BLE.
+- **Conclusion**: Bluetooth cannot drive the display on macOS.

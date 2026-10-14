@@ -49,5 +49,7 @@ DONGLE = Profile(
     inter_packet_delay_s=0.015,
 )
 
-# Priority order: Wired USB > 2.4G Dongle (Bluetooth is infeasible on macOS due to missing vendor HID collections)
-PROFILES = (WIRED, DONGLE)
+# Supported display transport profiles.
+# Wired USB is the only physical bus connected to the 51x5 LED matrix controller.
+# (Dongle and Bluetooth are documented in recon/wireless-findings.md as physically unrouted to display).
+PROFILES = (WIRED,)

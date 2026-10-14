@@ -79,7 +79,7 @@ def test_display_open_priority_wired():
 
 
 def test_display_open_fallback_to_dongle():
-    """When only 2.4G dongle is present, auto-fallback opens DONGLE profile."""
+    """When multi-profile is configured and only dongle is present, opens DONGLE profile."""
     mock_devices = {
         (VID, 0x8009): [],
         (VID, 0xFEFE): [{"usage_page": 0xFF60, "usage": 0x0061, "path": b"path_dongle_cmd"}],
@@ -88,7 +88,11 @@ def test_display_open_fallback_to_dongle():
     def fake_enumerate(vid, pid):
         return mock_devices.get((vid, pid), [])
 
-    with patch("hid.enumerate", side_effect=fake_enumerate), patch("hid.device") as mock_dev_cls:
+    with (
+        patch("kx98.hiddev.PROFILES", (WIRED, DONGLE)),
+        patch("hid.enumerate", side_effect=fake_enumerate),
+        patch("hid.device") as mock_dev_cls,
+    ):
         mock_instance = MagicMock()
         mock_dev_cls.return_value = mock_instance
 
@@ -98,7 +102,6 @@ def test_display_open_fallback_to_dongle():
         assert disp.profile == DONGLE
         assert disp.path == b"path_dongle_cmd"
         mock_instance.open_path.assert_called_once_with(b"path_dongle_cmd")
-
 
 def test_display_open_none_raises_oserror():
     """When no devices are present, open() raises OSError."""
